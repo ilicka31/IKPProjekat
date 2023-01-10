@@ -7,243 +7,159 @@
 #include <stdio.h>
 #include "conio.h"
 #include <stdbool.h>
+#include <pthread.h>
+#include <time.h>
+
 
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
-#pragma warning(disable : 4996)
 #pragma pack(1)
 
 //#include "hashmap.h"
 #include "../Common/communication.h"
+#include "../Common/shared.h"
+#include "Queue.h"
+#include "ClientHandler.h"
+#include "WorkerList.h"
+#include "WorkerHandler.h"
+#include "DispatcherHandler.h"
+#include "ReceiverHandler.h"
+
 
 #pragma comment(lib, "Ws2_32.lib")
-#define BUFFER_SIZE 512
 #define SERVER_PORT 27016
-#define MAX_CLIENTS 50
+#define MAX_CLIENTS 10
+	
 
 int main(void)
 {
-    // Socket za prihvatanje novih klijenata
-    SOCKET listenSocket = INVALID_SOCKET;
-    // Socket za komunikaciju sa klijentom
-    //SOCKET acceptedSocket = INVALID_SOCKET;
+	SOCKET listenClients = SetListenSocket("5059"), listenWorkers = SetListenSocket("4000");
+	if (listenClients == INVALID_SOCKET || listenWorkers == INVALID_SOCKET) {
+		WSACleanup();
+		return 1;
+	}
 
+	freeWorkers = 0;
+	headBusy = NULL, headFree = NULL;
+	tailBusy = NULL, tailFree = NULL;
+	headQ = NULL, tailQ=NULL;
+    HANDLE threadDispatcher = CreateThread(NULL, 0, &DispatcherHandler, NULL, 0, NULL);
+	HANDLE threadReceiver = CreateThread(NULL, 0, &ReceiverHandler, NULL, 0, NULL);
+	InitializeCriticalSection(&csOutput);
+	InitializeCriticalSection(&csQ);
+	InitializeCriticalSection(&csBusy);
+	InitializeCriticalSection(&csFree);
+	InitializeClients();
 
-     //Sockets used for communication with client
-	SOCKET clientSockets[MAX_CLIENTS];
-	short lastIndex = 0;
+	print("Press q to exit...\n");
+	FD_SET set;
+	timeval time = { 5, 0 };
+	SOCKADDR_IN address;
+	int addrlen = sizeof(address);
+	static int clientCount = 0;
+	while (true) {
+		FD_ZERO(&set);
+		FD_SET(listenClients, &set);
+		FD_SET(listenWorkers, &set);
 
-    int iResult;
-    // Buffer used for storing incoming data
-    char dataBuffer[BUFFER_SIZE];
+		if (_kbhit()) {
+			if (_getch() == 'q') {
+				print("Closing...");
+				break;
+			}
+		}
 
-    if (InitializeWindowsSockets() == false)
-    {
-        // we won't log anything since it will be logged
-        // by InitializeWindowsSockets() function
-        return 1;
-    }
+		int result = select(0, &set, NULL, NULL, &time);
+		if (result == SOCKET_ERROR) {
+			print("select error: %d", WSAGetLastError());
+			break;
+		}
+		else if (result == 0) {
+			Sleep(1000);
+			continue;
+		}
+		else if (result > 0) {
+			if (FD_ISSET(listenClients, &set)) {
+				bool connected = false;
+				for (int i = 0; i < MAX_CLIENTS; i++) {
+					if (!clients[i].isUsed) {
+						SOCKET socket = accept(listenClients, (sockaddr*)&address, &addrlen);
+						if (socket == INVALID_SOCKET)
+							break;
+						++clientCount;
+						//strukturu sa soketom i ovim clcou
+						ClientPacket cp = { clientCount, socket };
+						HANDLE handle = CreateThread(NULL, 0, &ClientHandler, &cp, 0, NULL);
+						//Proveriti da li je handle uspeo..
+						if (handle == NULL) {
+							print("Client couldn't make thread");
+							break;
+						}
 
-    // Prepare address information structures
-    // Initialize serverAddress structure used by bind
-    struct sockaddr_in serverAddress;
-    memset((char*)&serverAddress, 0, sizeof(serverAddress));
-    serverAddress.sin_family = AF_INET;				// IPv4 address family
-    serverAddress.sin_addr.s_addr = INADDR_ANY;		// Use all available addresses
-    serverAddress.sin_port = htons(SERVER_PORT);	// Use specific port
+						clients[i] = {clientCount,handle, socket, true };
+						connected = true;
+						break;
+					}
+				}
 
-    //lista klijentskih socketa setovana na 0
-    //memset(clientSockets, 0, MAX_CLIENTS * sizeof(SOCKET));
+				if (connected) continue;
 
-    // Create a SOCKET for connecting to server
-    listenSocket = socket(AF_INET,      // IPv4 address family
-        SOCK_STREAM,  // Stream socket
-        IPPROTO_TCP); // TCP protocol
+				print("Too much clients, can't connect");
+				SOCKET socket = accept(listenWorkers, (sockaddr*)&address, &addrlen);
+				if (socket == INVALID_SOCKET)
+					break;
 
-// Check if socket is successfully created
-    if (listenSocket == INVALID_SOCKET)
-    {
-        printf("socket failed with error: %d\n", WSAGetLastError());
-        WSACleanup();
-        return 1;
-    }
+				shutdown(socket, SD_BOTH);
+				closesocket(socket);
+				continue;
+			}
+			else if (FD_ISSET(listenWorkers, &set)) {
+				if (freeWorkers >= 10) {
+					print("Too much workers, can't connect");
+					SOCKET socket = accept(listenWorkers, (sockaddr*)&address, &addrlen);
+					if (socket == INVALID_SOCKET)
+						break;
 
-    // Setup the TCP listening socket - bind port number and local address to socket
-    iResult = bind(listenSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
+					shutdown(socket, SD_BOTH);
+					closesocket(socket);
+					continue;
+				}
 
-    // Check if socket is successfully binded to address and port from sockaddr_in structure
-    if (iResult == SOCKET_ERROR)
-    {
-        printf("bind failed with error: %d\n", WSAGetLastError());
-        closesocket(listenSocket);
-        WSACleanup();
-        return 1;
-    }
-    //da se ne konektuju automatski
-    bool bOptVal = true;
-    int bOptLen = sizeof(bool);
-    iResult = setsockopt(listenSocket, SOL_SOCKET, SO_CONDITIONAL_ACCEPT, (char*)&bOptVal, bOptLen);
-    if (iResult == SOCKET_ERROR) {
-        printf("setsockopt for SO_CONDITIONAL_ACCEPT failed with error: %u\n", WSAGetLastError());
-    }
+				SOCKET socket = accept(listenWorkers, (sockaddr*)&address, &addrlen);
+				if (socket == INVALID_SOCKET) {
+					print("Accept error: %d", WSAGetLastError());
+					continue;
+				}
+				
+				newWorker->data.socket = socket;
+				newWorker->shuttingDown = false;
+				newWorker->next = NULL;
+				newWorker->data.handle = CreateThread(NULL, 0, &WorkerRegistry, newWorker, 0, NULL);
 
+			}
+		}
+	}
+	free(newWorker);
+	tailQ = NULL;
+	tailBusy =NULL;
+	tailFree = NULL;
+	ClearQueue(&headQ);
+	CloseAllWorkers(&headBusy);
+	CloseAllWorkers(&headFree);
+	CloseAllClients();
 
-    unsigned long  mode = 1;
-    if (ioctlsocket(listenSocket, FIONBIO, &mode) != 0)
-        printf("ioctlsocket failed with error.");
+	closesocket(listenClients);
+	closesocket(listenWorkers);
+	WSACleanup();
 
-    // Set listenSocket in listening mode
-    iResult = listen(listenSocket, SOMAXCONN);
-    if (iResult == SOCKET_ERROR)
-    {
-        printf("listen failed with error: %d\n", WSAGetLastError());
-        closesocket(listenSocket);
-        WSACleanup();
-        return 1;
-    }
+	DeleteCriticalSection(&csOutput);
+	DeleteCriticalSection(&csQ);
+	DeleteCriticalSection(&csBusy);
+	DeleteCriticalSection(&csFree);
+	SafeCloseHandle(threadDispatcher);
+	SafeCloseHandle(threadReceiver);
 
-    printf("Server socket is set to listening mode. Waiting for new connection requests.\n");
-
-    // set of socket descriptors
-    fd_set readfds;
-
-    // timeout for select function
-    timeval timeVal;
-    timeVal.tv_sec = 1;
-    timeVal.tv_usec = 0;
-
-    while (true)
-    {
-        // initialize socket set
-        FD_ZERO(&readfds);
-
-        // add server's socket and clients' sockets to set
-        if (lastIndex != MAX_CLIENTS)
-        {
-            FD_SET(listenSocket, &readfds);
-        }
-
-        for (int i = 0; i < lastIndex; i++)
-        {
-            FD_SET(clientSockets[i], &readfds);
-        }
-
-        // wait for events on set
-        int selectResult = select(0, &readfds, NULL, NULL, &timeVal);
-
-        if (selectResult == SOCKET_ERROR)
-        {
-            printf("Select failed with error: %d\n", WSAGetLastError());
-            closesocket(listenSocket);
-            WSACleanup();
-            return 1;
-        }
-        else if (selectResult == 0) // timeout expired
-        {
-            if (_kbhit()) //check if some key is pressed
-            {
-                _getch();
-                printf("Istekao timeout\n");
-            }
-            continue;
-        }
-        else if (FD_ISSET(listenSocket, &readfds))
-        {
-            // Struct for information about connected client
-            struct sockaddr_in clientAddr;
-
-            int clientAddrSize = sizeof(struct sockaddr_in);
-
-            // Accept new connections from clients
-            // New connection request is received. Add new socket in array on first free position.
-            clientSockets[lastIndex] = accept(listenSocket, (struct sockaddr*)&clientAddr, &clientAddrSize);
-
-
-            // Check if accepted socket is valid
-            if (clientSockets[lastIndex] == INVALID_SOCKET)
-            {
-                if (WSAGetLastError() == WSAECONNRESET)
-                {
-                    printf("accept failed, because timeout for client request has expired.\n");
-                }
-                else
-                {
-                    printf("accept failed with error: %d\n", WSAGetLastError());
-                }
-            }
-            else
-            {
-                if (ioctlsocket(clientSockets[lastIndex], FIONBIO, &mode) != 0)
-                {
-                    printf("ioctlsocket failed with error.");
-                    continue;
-                }
-                lastIndex++;
-                printf("New client request accepted (%d). Client address: %s : %d\n", lastIndex, inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
-
-            }
-        }
-        else
-        {
-
-            // Check if new message is received from connected clients
-            for (int i = 0; i < lastIndex; i++)
-            {
-                // Check if new message is received from client on position "i"
-                if (FD_ISSET(clientSockets[i], &readfds))
-                {
-                    iResult = recv(clientSockets[i], dataBuffer, BUFFER_SIZE, 0);
-
-                    if (iResult > 0)
-                    {
-                        dataBuffer[iResult] = '\0';
-                        printf("Message received from client (%d):\n", i + 1);
-                        printf("Client send: %s\n", dataBuffer);
-                        printf("_______________________________  \n");
-                    }
-                    else if (iResult == 0)
-                    {
-                        // connection was closed gracefully
-                        printf("Connection with client (%d) closed.\n", i + 1);
-                        closesocket(clientSockets[i]);
-
-                        // sort array and clean last place
-                        for (int j = i; j < lastIndex - 1; j++)
-                        {
-                            clientSockets[j] = clientSockets[j + 1];
-                        }
-                        clientSockets[lastIndex - 1] = 0;
-
-                        lastIndex--;
-                    }
-                    else
-                    {
-                        // there was an error during recv
-                        printf("recv failed with error: %d\n", WSAGetLastError());
-                        closesocket(clientSockets[i]);
-
-                        // sort array and clean last place
-                        for (int j = i; j < lastIndex - 1; j++)
-                        {
-                            clientSockets[j] = clientSockets[j + 1];
-                        }
-                        clientSockets[lastIndex - 1] = 0;
-
-                        lastIndex--;
-                    }
-                }
-            }
-        }
-    }
-
-    //Close listen and accepted sockets
-    closesocket(listenSocket);
-
-
-    // Deinitialize WSA library
-    WSACleanup();
-
-    return 0;
-
+	return 0;
 }
+

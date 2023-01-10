@@ -15,93 +15,103 @@
 #include "../Common/communication.h"
 
 
-#define SERVER_IP_ADDRESS "127.0.0.1"
-#define BUFFER_SIZE 512
-#define SERVER_PORT 27016
+
 
 int main(int argc, char** argv)
 {
-    SOCKET connectSocket = INVALID_SOCKET;
-    // variable used to store function return value
-    int iResult;
-    // message to send
-    char dataBuffer[BUFFER_SIZE];
+	
+	SOCKET socket = ConnectSocket(5059);
+	if (socket == INVALID_SOCKET) {
+		printf("Connection doesnt work %d", WSAGetLastError());
+		closesocket(socket);
+		WSACleanup();
+		return 1;
+	}
+	char buffer[BUFFER_SIZE];
 
-    // Validate the parameters
-    /*  if (argc != 2)
-      {
-          printf("usage: %s server-name\n", argv[0]);
-          return 1;
-      }
-    */
-    if (InitializeWindowsSockets() == false)
-    {
-        // we won't log anything since it will be logged
-        // by InitializeWindowsSockets() function
-        return 1;
-    }
-
-    // create a socket
-    connectSocket = socket(AF_INET,
-        SOCK_STREAM,
-        IPPROTO_TCP);
-
-    if (connectSocket == INVALID_SOCKET)
-    {
-        printf("socket failed with error: %d\n", WSAGetLastError());
-        WSACleanup();
-        return 1;
-    }
-
-    // create and initialize address structure
-    struct sockaddr_in serverAddress;
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_addr.s_addr = inet_addr(SERVER_IP_ADDRESS);
-    serverAddress.sin_port = htons(SERVER_PORT);
-    // connect to server specified in serverAddress and socket connectSocket
-    if (connect(connectSocket, (SOCKADDR*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR)
-    {
-        printf("Unable to connect to server.\n");
-        closesocket(connectSocket);
-        WSACleanup();
-        return 1;
-    }
-    do {
-        printf("Enter message to send: ");
-        gets_s(dataBuffer);
-        // Send an prepared message with null terminator included
-        iResult = send(connectSocket, dataBuffer, (int)strlen(dataBuffer), 0);
-
-        if (iResult == SOCKET_ERROR)
-        {
-            printf("send failed with error: %d\n", WSAGetLastError());
-            closesocket(connectSocket);
-            WSACleanup();
-            return 1;
-        }
-    } while (strcmp(dataBuffer, "KRAJ"));
-
-    // Shutdown the connection since we're done
-    iResult = shutdown(connectSocket, SD_BOTH);
-
-    // Check if connection is succesfully shut down.
-    if (iResult == SOCKET_ERROR)
-    {
-        printf("Shutdown failed with error: %d\n", WSAGetLastError());
-        closesocket(connectSocket);
-        WSACleanup();
-        return 1;
-    }
-
-    // For demonstration purpose
-    printf("\nPress any key to exit: ");
-    _getch();
+	FD_SET setSend, setRcv;
+	timeval time;
+	time.tv_sec = 1;
+	time.tv_usec = 0;
+	const char* mess = "Klijent salje pozdrave!";
+	bool flag = false;
+	printf("Press q to exit...\n");
+	Sleep(1000);
+	while (true) {
+		if (_kbhit())
+			if (_getch() == 'q')
+				break;
 
 
-    // Close connected socket
-    closesocket(connectSocket);
+		FD_ZERO(&setSend);
+		FD_SET(socket, &setSend);
+		FD_ZERO(&setRcv);
+		FD_SET(socket, &setRcv);
 
-    // Deinitialize WSA library
-    WSACleanup();
-    return 0;
+		int sResult = select(0, &setRcv, &setSend, NULL, &time);
+
+		if (sResult == SOCKET_ERROR) {
+			printf("ERROR select: %d\n", WSAGetLastError());
+			shutdown(socket, SD_BOTH);
+			closesocket(socket);
+			WSACleanup();
+			return 1;
+		}
+		else if (sResult == 0) {
+			continue;
+		}
+		else if (sResult > 0) {
+			if (FD_ISSET(socket, &setSend)) {
+
+				if (!flag) {
+					for (int i = 0; i < strlen(mess); i++)
+					{
+						buffer[i] = mess[i];
+					}
+					buffer[strlen(mess) - 1] = 0;
+					printf("Klijent salje poruku: %s", buffer);
+					int iResult = send(socket, buffer, strlen(mess), 0);
+					if (iResult == SOCKET_ERROR) {
+						printf("Error: %d\n", WSAGetLastError());
+						shutdown(socket, SD_BOTH);
+						closesocket(socket);
+						WSACleanup();
+						return 1;
+					}
+					flag = true;
+				}
+			}
+
+			
+
+
+			if (FD_ISSET(socket, &setRcv)) {
+
+				int iResult = recv(socket, buffer, BUFFER_SIZE, 0);
+				if (iResult > 0)
+				{
+					buffer[iResult] = 0;
+					printf("\nMessage received from server: %s\n", buffer);
+					break;
+				}
+				else if (iResult == 0)
+					continue;
+				else
+				{
+					// there was an error during recv
+					printf("recv failed with error: %d\n", WSAGetLastError());
+					closesocket(socket);
+				}
+
+			}
+		}
+		Sleep(5000);
+		
+	}
+	printf("Safely returned");
+	shutdown(socket, SD_BOTH);
+	closesocket(socket);
+	WSACleanup();
+	_getch();
+	return 0;
 }

@@ -18,5 +18,11 @@
     <ClInclude Include="communication.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="structures.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shared.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
