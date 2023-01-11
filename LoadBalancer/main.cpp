@@ -45,7 +45,8 @@ int main(void)
 	tailBusy = NULL, tailFree = NULL;
 	headQ = NULL, tailQ=NULL;
     HANDLE threadDispatcher = CreateThread(NULL, 0, &DispatcherHandler, NULL, 0, NULL);
-	HANDLE threadReceiver = CreateThread(NULL, 0, &ReceiverHandler, NULL, 0, NULL);
+	HANDLE threadReceiverFree = CreateThread(NULL, 0, &ReceiverFreeHandler, NULL, 0, NULL);
+	HANDLE threadReceiverBusy = CreateThread(NULL, 0, &ReceiverBusyHandler, NULL, 0, NULL);
 	InitializeCriticalSection(&csOutput);
 	InitializeCriticalSection(&csQ);
 	InitializeCriticalSection(&csBusy);
@@ -88,15 +89,12 @@ int main(void)
 						if (socket == INVALID_SOCKET)
 							break;
 						++clientCount;
-						//strukturu sa soketom i ovim clcou
 						ClientPacket cp = { clientCount, socket };
 						HANDLE handle = CreateThread(NULL, 0, &ClientHandler, &cp, 0, NULL);
-						//Proveriti da li je handle uspeo..
 						if (handle == NULL) {
 							print("Client couldn't make thread");
 							break;
 						}
-
 						clients[i] = {clientCount,handle, socket, true };
 						connected = true;
 						break;
@@ -140,6 +138,7 @@ int main(void)
 			}
 		}
 	}
+
 	free(newWorker);
 	tailQ = NULL;
 	tailBusy =NULL;
@@ -158,8 +157,9 @@ int main(void)
 	DeleteCriticalSection(&csBusy);
 	DeleteCriticalSection(&csFree);
 	SafeCloseHandle(threadDispatcher);
-	SafeCloseHandle(threadReceiver);
-
+	SafeCloseHandle(threadReceiverFree);
+	SafeCloseHandle(threadReceiverBusy);
+	_getch();
 	return 0;
 }
 

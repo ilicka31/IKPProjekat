@@ -42,6 +42,7 @@ int main(int argc, char** argv)
     char odjava[] = "Odjavljujem se!";
     char *sendMessage;
     printf("Press q to exit...\n");
+
     while (true) { 
         FD_ZERO(&write);
         FD_SET(socket, &write);
@@ -78,7 +79,10 @@ int main(int argc, char** argv)
 
         int sResult = select(0, &read, &write, NULL, &time);
         if (sResult == SOCKET_ERROR)
+        {
+            printf("Select error: %d\n", WSAGetLastError());
             break;
+        }
         else if (sResult == 0)
         {
             Sleep(2000);
@@ -108,13 +112,13 @@ int main(int argc, char** argv)
                     strcat(pombuffer, id);
                     pombuffer[strlen(buffer)] = 0;
 
-                    if (FD_ISSET(socket, &write)) {
+                   // if (FD_ISSET(socket, &write)) {
                         printf("\nSaljem nazad LoadBalanceru: %s", pombuffer);
                         int iResult = send(socket, pombuffer, strlen(pombuffer), 0);
                         if (iResult == SOCKET_ERROR)
                             printf("Error send: %d\n", WSAGetLastError());
                         
-                    }
+                  //  }
                     
                 }
             }

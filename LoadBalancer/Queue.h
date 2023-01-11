@@ -7,9 +7,13 @@ bool Dequeue(QueueItem** head, QueueItem** tail, char** ret) {
 		return false;
 
 	*ret = (char*)malloc(BUFFER_SIZE);
+	if (*ret == NULL)
+		return false;
 	memcpy(*ret, (*head)->data, BUFFER_SIZE);
+
 	QueueItem* temp = *head;
-	if (*tail == *head) *tail = NULL;
+	if (*tail == *head)
+		*tail = NULL;
 	*head = (*head)->next;
 	free(temp);
 	return true;

@@ -29,7 +29,8 @@ Worker* AddWorker(Worker** head, Worker** tail, WorkerData data) {
 }
 
 Worker* RemoveWorker(Worker** head, Worker** tail) {
-	Worker* temp = (Worker*)malloc(sizeof(Worker));
+	
+	Worker* temp;
 	if (temp == NULL)
 		return NULL;
 
@@ -63,6 +64,83 @@ Worker* RemoveWorker(Worker** head, Worker** tail) {
 
 
 
+Worker* PopWorker(Worker** head, Worker** tail) {
+
+	Worker* temp;
+
+	if (head == NULL)
+		return NULL;
+
+	if (tail == NULL) {
+		return NULL;
+	}
+	//temp = *tail;
+	temp->data.handle = (*tail)->data.handle;
+	temp->data.socket = (*tail)->data.socket;
+	temp->next = (*tail)->next;
+	temp->shuttingDown = (*tail)->shuttingDown;
+
+	if (*head == *tail) {
+		*head = *tail = NULL;
+	}
+	else {
+		Worker* newTail = *head;
+		while (newTail->next != *tail) {
+			newTail = newTail->next;
+		}
+		*tail = newTail;
+		(*tail)->next = NULL;
+	}
+	return temp;
+}
+
+
+bool move(Worker** srcHead, Worker** srcTail, Worker** destHead, Worker** destTail, Worker* item) {
+	if (*srcHead == NULL) //if src list is empty
+		return false;
+
+	// check if item is already present in the destination list 
+	Worker* current = *destHead;
+	while (current != NULL && current != item) {
+		current = current->next;
+	}
+	if (current != NULL)
+		return false;
+
+	Worker* previous = NULL;
+	current = *srcHead;
+	while (current != NULL && current != item) {
+		previous = current;
+		current = current->next;
+	}
+	if (current != NULL) {
+		if (previous == NULL) {
+			*srcHead = current->next;
+		}
+		else {
+			previous->next = current->next;
+		}
+		if (current == *srcTail) {
+			*srcTail = previous;
+		}
+		current->next = NULL;
+
+		if (*destHead == NULL) {
+			*destHead = current;
+			*destTail = current;
+		}
+		else {
+			(*destTail)->next = current;
+			*destTail = current;
+		}
+		if (*srcHead == NULL)
+			*srcTail = NULL;
+		return true;
+	}
+	else {
+		return false;
+	}
+}
 
 bool RemoveExactWorker(Worker** head, Worker** tail, Worker* w) {
 	Worker* temp = *head;

@@ -83,6 +83,36 @@ bool RemoveExactWorkerSafe(Worker* w) {
 	return done;
 }
 
+bool SafeMove(Worker* item, EWorkers listSource) // from list src to list dest move item
+{
+	bool ret = false;
+	if (listSource == L1)
+	{
+		
+		EnterCriticalSection(&csFree);
+		EnterCriticalSection(&csBusy);
+		ret = move(&headFree, &tailFree, &headBusy, &tailBusy, item);
+		if (ret)
+			print("Worker moved from FREE list to BUSY list!");
+		LeaveCriticalSection(&csBusy);
+		LeaveCriticalSection(&csFree);
+	}
+	else
+	{
+		EnterCriticalSection(&csBusy);
+		EnterCriticalSection(&csFree);
+		ret = move(&headBusy, &tailBusy,&headFree, &tailFree, item);
+		if(ret)
+			print("Worker moved from BUSY list to FREE list!");
+		LeaveCriticalSection(&csFree);
+		LeaveCriticalSection(&csBusy);
+	}
+	
+	return ret;
+}
+
+
+
 Worker* RemoveWorkerSafe(EWorkers list) {
 	Worker* worker = NULL;
 	if (list == L1) {

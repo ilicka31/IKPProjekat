@@ -8,24 +8,26 @@ FD_SET readfds;
 char pombuffer[BUFFER_SIZE];
 int id;
 
-DWORD WINAPI ReceiverHandler(LPVOID param) 
-{
+
+
+DWORD WINAPI ReceiverFreeHandler(LPVOID param) {
+
 	while (true)
 	{
-		FD_ZERO(&readfds);
 		char dataBuffer[BUFFER_SIZE];
-
 		if (headFree != NULL) {
 
+			FD_ZERO(&readfds);
 
 			Worker* pom = headFree;
-			
+
 
 			while (pom != NULL)
 			{
 				FD_SET(pom->data.socket, &readfds);
 				pom = pom->next;
 			}
+			pom = headFree;
 
 			int selectResult = select(0, &readfds, NULL, NULL, &timeVal);
 
@@ -42,54 +44,64 @@ DWORD WINAPI ReceiverHandler(LPVOID param)
 			}
 			else
 			{
-				while (headFree != NULL)
-				{
-					// Check if new message is received from client on position "i"
-					//treba da primi Zahtev je obradjen
-					if (FD_ISSET(headFree->data.socket, &readfds))
+				
+				if (FD_ISSET(headFree->data.socket, &readfds))
+				{   //da slusa kad se odjavi
+					int iResult = recv(headFree->data.socket, dataBuffer, BUFFER_SIZE, 0);
+					if (iResult > 0)
 					{
-						int iResult = recv(headFree->data.socket, dataBuffer, BUFFER_SIZE, 0);
-						if (iResult > 0)
-						{
-							dataBuffer[iResult] = 0;
-							print("Response from Workeer: %s", dataBuffer);
-							CloseWorkerSafe(headFree->data.socket, L2);
-						}
-						else if (iResult == 0)
-						{
-							// connection was closed gracefully
-							printf("Connection with worker closed.\n");
-							CloseWorkerSafe(headFree->data.socket, L2);
-
-						}
-						else
-						{
-							// there was an error during recv
-							printf("recv failed with error: %d\n", WSAGetLastError());
-							CloseWorkerSafe(headFree->data.socket, L2);
-							Sleep(1000);
-
-						}
+						dataBuffer[iResult] = 0;
+						print("Response from Worker: %s", dataBuffer);
+						CloseWorkerSafe(headFree->data.socket, L1);
 					}
-					if (headFree == NULL) {
-						Sleep(5000);
-						continue;
+					else if (iResult == 0)
+					{
+						// connection was closed gracefully
+						printf("Connection with worker closed.\n");
+						CloseWorkerSafe(headFree->data.socket, L1);
+
 					}
 					else
 					{
-						headFree = headFree->next;
+						if (WSAGetLastError() == WSAEWOULDBLOCK)
+						{
+							Sleep(100);
+							continue;
+						}
+						// there was an error during recv
+						printf("recv failed with error: %d\n", WSAGetLastError());
+						CloseWorkerSafe(headFree->data.socket, L1);
+						Sleep(1000);
+
 					}
 				}
+				if (headFree == NULL) {
+					Sleep(2000);
+					continue;
+				}
+				pom = pom->next;
 			}
 		}
+		else
+		{
+			print("Waiting FREE!");
+			Sleep(2000);
+			continue;
+		}
 
+	}
 
-
-
-
+}
+DWORD WINAPI ReceiverBusyHandler(LPVOID param) 
+{
+	while (true)
+	{
+		
+		char dataBuffer[BUFFER_SIZE];
 
 		if (headBusy != NULL)
 		{
+			FD_ZERO(&readfds);	
 			Worker* pom = headBusy;
 		
 			while (pom != NULL)
@@ -97,7 +109,7 @@ DWORD WINAPI ReceiverHandler(LPVOID param)
 				FD_SET(pom->data.socket, &readfds);
 				pom = pom->next;
 			}
-
+			pom = headBusy;
 
 			int selectResult = select(0, &readfds, NULL, NULL, &timeVal);
 
@@ -107,21 +119,15 @@ DWORD WINAPI ReceiverHandler(LPVOID param)
 				WSACleanup();
 				return 1;
 			}
-			else if (selectResult == 0) // timeout expired
+			else if (selectResult == 0)
 			{
 				Sleep(1000);
-
 			}
 			else
 			{
-				// Check if new message is received from connected clients
-				while (headBusy != NULL)
-				{
-					// Check if new message is received from client on position "i"
-					//treba da primi Zahtev je obradjen
-					if (FD_ISSET(headBusy->data.socket, &readfds))
+					if (FD_ISSET(pom->data.socket, &readfds))
 					{
-						int iResult = recv(headBusy->data.socket, dataBuffer, BUFFER_SIZE, 0);
+						int iResult = recv(pom->data.socket, dataBuffer, BUFFER_SIZE, 0);
 						if (iResult > 0)
 						{
 							dataBuffer[iResult] = 0;
@@ -140,17 +146,15 @@ DWORD WINAPI ReceiverHandler(LPVOID param)
 								token = strtok(NULL, "$");
 							}
 							bool flag = false;
-							//treba da nadje kijenta sa id i poalje mu poruku?
 							for (int i = 0; i < NUM_OF_CLIENTS; i++)
 							{
 								if (clients[i].id == id)
 								{
 									int sResult = send(clients[i].socket, "Zahtev obradjen!", 17, 0);
 									//izbaci iz busy i u free
-									Worker* w = FindWorkerForSocket(headBusy->data.socket, L2);
-									Worker pom = *w;
-									RemoveExactWorkerSafe(w);
-									AddWorkerSafe(pom.data, L1);
+									Worker* w = FindWorkerForSocket(pom->data.socket, L2);
+									SafeMove(w, L2);
+									
 									flag = true;
 									break;
 								}
@@ -166,9 +170,7 @@ DWORD WINAPI ReceiverHandler(LPVOID param)
 						{
 							// connection was closed gracefully
 							printf("Connection with worker closed.\n");
-							//CloseWorkerSafe(headBusy->data.socket,L2)
-
-
+							CloseWorkerSafe(headBusy->data.socket, L2);
 						}
 						else
 						{
@@ -179,30 +181,23 @@ DWORD WINAPI ReceiverHandler(LPVOID param)
 							}
 							// there was an error during recv
 							printf("recv failed with error: %d\n", WSAGetLastError());
-							//closesocket(head->data.socket);
 							CloseWorkerSafe(headBusy->data.socket, L2);
 							Sleep(1000);
-
 						}
 					}
 
 					if (headBusy == NULL) {
-						Sleep(5000);
+						Sleep(2000);
 						continue;
-					}
-					else
-					{
-						headBusy = headBusy->next;
-					}
-					
-				}
+					}	
+					pom = pom->next;	
 			}
 		}
 		else
 		{
-			print("Waiting!");
-			Sleep(3000);
-			//continue;
+			print("Waiting BUSY!");
+			Sleep(2000);
+			continue;
 		}
 	}
 	return 0;

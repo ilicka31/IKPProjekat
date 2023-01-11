@@ -37,6 +37,7 @@ int main(int argc, char** argv)
 	bool flag = false;
 	printf("Press q to exit...\n");
 	Sleep(1000);
+
 	while (true) {
 		if (_kbhit())
 			if (_getch() == 'q')
@@ -45,6 +46,7 @@ int main(int argc, char** argv)
 
 		FD_ZERO(&setSend);
 		FD_SET(socket, &setSend);
+
 		FD_ZERO(&setRcv);
 		FD_SET(socket, &setRcv);
 
@@ -95,7 +97,10 @@ int main(int argc, char** argv)
 					break;
 				}
 				else if (iResult == 0)
+				{
+					Sleep(1000);
 					continue;
+				}
 				else
 				{
 					// there was an error during recv
