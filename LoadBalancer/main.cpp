@@ -26,7 +26,6 @@
 #include "DispatcherHandler.h"
 #include "ReceiverHandler.h"
 
-
 #pragma comment(lib, "Ws2_32.lib")
 #define SERVER_PORT 27016
 #define MAX_CLIENTS 10
@@ -56,9 +55,12 @@ int main(void)
 	print("Press q to exit...\n");
 	FD_SET set;
 	timeval time = { 5, 0 };
+
 	SOCKADDR_IN address;
 	int addrlen = sizeof(address);
+
 	static int clientCount = 0;
+
 	while (true) {
 		FD_ZERO(&set);
 		FD_SET(listenClients, &set);

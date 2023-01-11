@@ -73,7 +73,6 @@ DWORD WINAPI ClientHandler(LPVOID param) {
 			}
 			else if (iResult == 0) {
 				print("Client %d disconnected", socket);
-			//	DeleteRequest(id);
 				CloseClient(socket);
 				break;
 			}

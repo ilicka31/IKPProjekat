@@ -151,7 +151,6 @@ DWORD WINAPI ReceiverBusyHandler(LPVOID param)
 								if (clients[i].id == id)
 								{
 									int sResult = send(clients[i].socket, "Zahtev obradjen!", 17, 0);
-									//izbaci iz busy i u free
 									Worker* w = FindWorkerForSocket(pom->data.socket, L2);
 									SafeMove(w, L2);
 									

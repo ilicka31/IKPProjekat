@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include "conio.h"
 #include <stdbool.h>
-
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
@@ -14,7 +13,6 @@
 #pragma warning(disable : 4703)
 #pragma pack(1)
 #include "../Common/communication.h"
-
 
 #define BUFFER_SIZE 512
 
@@ -29,18 +27,19 @@ int main(int argc, char** argv)
         return 1;
     }
 
-
-
     char buffer[BUFFER_SIZE];
     char pombuffer[BUFFER_SIZE];
     char* id;
+
     FD_SET read, write;
     timeval time;
     time.tv_sec = 1;
     time.tv_usec = 0;
+
     char message[] = "Zahtev je obradjen!$";
     char odjava[] = "Odjavljujem se!";
     char *sendMessage;
+
     printf("Press q to exit...\n");
 
     while (true) { 

@@ -1,5 +1,4 @@
 #pragma once
-
 #pragma comment(lib, "ws2_32.lib")
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
@@ -18,7 +17,6 @@
 bool InitializeWindowsSockets()
 {
 	WSADATA wsaData;
-	// Initialize windows sockets library for this process
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 	{
 		printf("WSAStartup failed with error: %d\n", WSAGetLastError());
@@ -39,7 +37,6 @@ void SetNonblocking(SOCKET* socket)
 SOCKET ConnectSocket(unsigned short port) {
 	if (!InitializeWindowsSockets())
 		return INVALID_SOCKET;
-
 	SOCKET temp = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
 	sockaddr_in address;
@@ -53,9 +50,7 @@ SOCKET ConnectSocket(unsigned short port) {
 		WSACleanup();
 		return INVALID_SOCKET;
 	}
-
 	SetNonblocking(&temp);
-
 	return temp;
 }
 
@@ -64,12 +59,9 @@ SOCKET SetListenSocket(PCSTR port) {
 
 	if (InitializeWindowsSockets() == false)
 	{
-		// we won't log anything since it will be logged
-		// by InitializeWindowsSockets() function
 		return INVALID_SOCKET;
 	}
 
-	// Prepare address information structures
 	addrinfo* resultingAddress = NULL;
 	addrinfo hints;
 

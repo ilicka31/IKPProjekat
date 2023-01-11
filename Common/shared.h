@@ -21,7 +21,8 @@ Worker* headFree, * tailFree;
 int freeWorkers;
 WorkerData workerData;
 
-void print(const char* format, ...) { //Easy print with critical section
+void print(const char* format, ...) 
+{ 
 	va_list args;
 	va_start(args, format);
 	EnterCriticalSection(&csOutput);
@@ -36,7 +37,6 @@ bool EnqueueSafe(char* data) {
 		EnterCriticalSection(&csQ);
 		res = Enqueue(&headQ, &tailQ, data);
 		LeaveCriticalSection(&csQ);
-	
 
 	if (res)
 		print("Successfully added %s to queue.", data);
@@ -66,7 +66,6 @@ Worker* AddWorkerSafe(WorkerData data, EWorkers list) {
 	{
 		EnterCriticalSection(&csBusy);
 		worker = AddWorker(&headBusy, &tailBusy, data);
-		//freeWorkers--;
 		LeaveCriticalSection(&csBusy);
 	}
 	print("Successfully added worker %d to queue %d",data.socket,list);
@@ -83,7 +82,7 @@ bool RemoveExactWorkerSafe(Worker* w) {
 	return done;
 }
 
-bool SafeMove(Worker* item, EWorkers listSource) // from list src to list dest move item
+bool SafeMove(Worker* item, EWorkers listSource) 
 {
 	bool ret = false;
 	if (listSource == L1)

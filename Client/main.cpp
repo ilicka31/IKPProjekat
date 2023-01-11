@@ -103,7 +103,6 @@ int main(int argc, char** argv)
 				}
 				else
 				{
-					// there was an error during recv
 					printf("recv failed with error: %d\n", WSAGetLastError());
 					closesocket(socket);
 				}

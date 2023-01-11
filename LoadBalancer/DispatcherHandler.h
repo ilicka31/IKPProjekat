@@ -52,7 +52,6 @@ DWORD WINAPI DispatcherHandler(LPVOID param) {
 		}
 		else 
 		{
-		//Sleep(3000);
 			if (DequeueSafe(&data))
 			{
 				//senderThread = CreateThread(NULL, 0, &SenderHandler, &data, 0, NULL);
@@ -74,7 +73,6 @@ DWORD WINAPI DispatcherHandler(LPVOID param) {
 						if (iResult == SOCKET_ERROR)
 							return false;
 						SafeMove(w, L1);
-						//AddWorkerSafe(w->data, L2);
 					}
 				}
 				else {
@@ -85,10 +83,7 @@ DWORD WINAPI DispatcherHandler(LPVOID param) {
 			{
 				print("Waiting!");
 				Sleep(3000);
-				//continue;
-			}
-
-		
+			}		
 		}
 	}
 	return 0;
